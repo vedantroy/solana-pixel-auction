@@ -30,6 +30,7 @@ pub mod auction {
             ],
         )?;
 
+        ctx.accounts.game_account.bid_lamports = bid;
         Ok(())
     }
 }
