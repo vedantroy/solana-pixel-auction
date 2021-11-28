@@ -3,9 +3,9 @@ import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import { Auction } from "../target/types/auction";
 
-async function createUser(provider) {
+async function createUser(provider, sol = 10) {
   // 2nd num = lamports per SOL (roughly)
-  const airdropBalance = 10 * 1_000_000_000;
+  const airdropBalance = sol * 1_000_000_000;
   let user = anchor.web3.Keypair.generate();
   let sig = await provider.connection.requestAirdrop(
     user.publicKey,
@@ -35,17 +35,17 @@ describe("auction", () => {
   const program = anchor.workspace.Auction as Program<Auction>;
 
   it("Can create game state", async () => {
-    const admin = await createUser(provider);
+    const admin = await createUser(provider, 10);
 
-    const bidder1 = await createUser(provider);
-    const bidder2 = anchor.web3.Keypair.generate();
+    const bidder1 = await createUser(provider, 10);
+    const bidder2 = await createUser(provider, 10);
 
     const [gameAccount, bump] = await anchor.web3.PublicKey.findProgramAddress(
       [],
       program.programId
     );
 
-    const tx = await program.rpc.createGameState(bump, {
+    await program.rpc.createGameState(bump, {
       accounts: {
         gameAccount: gameAccount,
         user: admin.key.publicKey,
@@ -68,5 +68,42 @@ describe("auction", () => {
 
     fetchedGameAccount = await program.account.gameState.fetch(gameAccount);
     assert.ok(fetchedGameAccount.bidLamports.toString() === "500");
+
+    await program.rpc.bid(new anchor.BN("600"), {
+      accounts: {
+        gameAccount: gameAccount,
+        from: bidder2.key.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [bidder2.key],
+    });
+
+    fetchedGameAccount = await program.account.gameState.fetch(gameAccount);
+    assert.ok(fetchedGameAccount.bidLamports.toString() === "600");
+
+    /*
+    {
+      // Test re-deriving the PDA (program derived account) with the bump
+      const gameAccount2  = await anchor.web3.PublicKey.createProgramAddress(
+        //@ts-ignore
+        [bump],
+        program.programId
+      );
+    }
+    */
+
+    try {
+      // A bid that's too small should fail
+      await program.rpc.bid(new anchor.BN("100"), {
+        accounts: {
+          gameAccount: gameAccount,
+          from: bidder2.key.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [bidder2.key],
+      });
+    } catch (e) {
+      assert.equal(e.toString(), "Bid too small");
+    }
   });
 });

@@ -16,6 +16,11 @@ pub mod auction {
     }
 
     pub fn bid(ctx: Context<DoGameBid>, bid: u64) -> ProgramResult {
+        if bid <= ctx.accounts.game_account.bid_lamports {
+            return Err(ErrorCode::BidTooSmall.into());
+        }
+        ctx.accounts.game_account.bid_lamports = bid;
+
         let ix = anchor_lang::solana_program::system_instruction::transfer(
             &ctx.accounts.from.key(),
             &ctx.accounts.game_account.key(),
@@ -30,9 +35,14 @@ pub mod auction {
             ],
         )?;
 
-        ctx.accounts.game_account.bid_lamports = bid;
         Ok(())
     }
+}
+
+#[error]
+pub enum ErrorCode {
+    #[msg("Bid too small")]
+    BidTooSmall,
 }
 
 #[derive(Accounts)]
