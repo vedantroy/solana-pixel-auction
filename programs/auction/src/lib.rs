@@ -7,10 +7,11 @@ pub mod auction {
 
     use super::*;
     pub fn create_game_state(ctx: Context<CreateGameState>, bump: u8) -> ProgramResult {
-        // I'm assuming these are set by default
         ctx.accounts.game_account.bump = bump;
+
+        // I'm assuming these are set by default
+        ctx.accounts.game_account.owner = Pubkey::default();
         ctx.accounts.game_account.bid_lamports = 0;
-        ctx.accounts.game_account.owner = None;
 
         Ok(())
     }
@@ -20,6 +21,7 @@ pub mod auction {
             return Err(ErrorCode::BidTooSmall.into());
         }
         ctx.accounts.game_account.bid_lamports = bid;
+        ctx.accounts.game_account.owner = ctx.accounts.from.key();
 
         let ix = anchor_lang::solana_program::system_instruction::transfer(
             &ctx.accounts.from.key(),
@@ -37,12 +39,22 @@ pub mod auction {
 
         Ok(())
     }
+
+    pub fn set_color(ctx: Context<SetColor>, color: u8) -> ProgramResult {
+        if ctx.accounts.from.key() != ctx.accounts.game_account.owner.key() {
+            return Err(ErrorCode::NotOwner.into());
+        }
+        ctx.accounts.game_account.pixel_color = color;
+        Ok(())
+    }
 }
 
 #[error]
 pub enum ErrorCode {
     #[msg("Bid too small")]
     BidTooSmall,
+    #[msg("Not owner")]
+    NotOwner,
 }
 
 #[derive(Accounts)]
@@ -72,20 +84,36 @@ pub struct DoGameBid<'info> {
 
 #[account]
 pub struct GameState {
-    pub bump: u8,
-    owner: Option<Pubkey>,
     bid_lamports: u64,
+    owner: Pubkey,
+    pub bump: u8,
+    pixel_color: u8,
+}
+
+// We could also just sign the pub key
+#[derive(Accounts)]
+#[instruction(color: u8)]
+pub struct SetColor<'info> {
+    #[account(mut, seeds = [], bump = game_account.bump)]
+    game_account: Account<'info, GameState>,
+
+    #[account(mut)]
+    from: Signer<'info>,
+
+    //system_program: Program<'info, System>,
 }
 
 impl GameState {
     fn space() -> usize {
         // discriminator
         8 +
-        // bump
-        1 +
+        // bid_lamports
+        8 + 
         // PubKey
         32 +
-        // bid_lamports
+        // bump
+        1 +
+        // pixel_color
         1
     }
 }

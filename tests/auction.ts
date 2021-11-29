@@ -34,9 +34,8 @@ describe("auction", () => {
 
   const program = anchor.workspace.Auction as Program<Auction>;
 
-  it("Can create game state", async () => {
+  it("Everything works", async () => {
     const admin = await createUser(provider, 10);
-
     const bidder1 = await createUser(provider, 10);
     const bidder2 = await createUser(provider, 10);
 
@@ -105,5 +104,16 @@ describe("auction", () => {
     } catch (e) {
       assert.equal(e.toString(), "Bid too small");
     }
+
+    await program.rpc.setColor(12, {
+      accounts: {
+        gameAccount: gameAccount,
+        from: bidder2.key.publicKey,
+      },
+      signers: [bidder2.key],
+    });
+
+    fetchedGameAccount = await program.account.gameState.fetch(gameAccount);
+    assert.ok(fetchedGameAccount.pixelColor.toString() === "12");
   });
 });
